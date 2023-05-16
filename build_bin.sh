@@ -4,23 +4,27 @@
 
 # Config
 # $type: built-in, extend, all
-# `bash build_bin.sh $type`: Will build for armeabi-v7a arm64-v8a x86 x86_64
+# $abis: all or abis(armeabi-v7a, arm64-v8a, x86, x86_64) split by `,`
+# `bash build_bin.sh $type $abis`
+# e.g. `bash build_bin.sh built-in x86,x86_64`
 
 # Whether use dev branch instead of release
-ZSTD_DEV=true
+ZSTD_DEV=false
 
 NDK_VERSION=r25c
 
-BIN_VERSION=1.3
+BIN_VERSION=1.4
 ZLIB_VERSION=1.2.13            # https://zlib.net/
-XZ_VERSION=5.4.2               # https://tukaani.org/xz/
+XZ_VERSION=5.4.3               # https://tukaani.org/xz/
 LZ4_VERSION=1.9.4              # https://github.com/lz4/lz4/releases
-ZSTD_VERSION=1.5.4             # https://github.com/facebook/zstd/releases
+ZSTD_VERSION=1.5.5             # https://github.com/facebook/zstd/releases
 TAR_VERSION=1.34               # https://ftp.gnu.org/gnu/tar/?C=M;O=D
-COREUTLS_VERSION=9.2           # https://ftp.gnu.org/gnu/coreutils/?C=M;O=D
+COREUTLS_VERSION=9.3           # https://ftp.gnu.org/gnu/coreutils/?C=M;O=D
+TREE_VERSION=2.1.0             # https://mama.indstate.edu/users/ice/tree
+
+EXTEND_VERSION=1.1.1
 LIBFUSE_VERSION=3.12.0         # https://github.com/libfuse/libfuse/releases
 RCLONE_VERSION=1.61.1          # https://github.com/rclone/rclone/releases
-EXTEND_VERSION=1.1.1
 
 ##################################################
 # Functions
@@ -250,6 +254,38 @@ build_coreutls() {
     rm -rf coreutils-$COREUTLS_VERSION
 }
 
+build_tree() {
+    # tree
+    if [ ! -f $LOCAL_PATH/tree-$TREE_VERSION.tgz ]; then
+        wget https://mama.indstate.edu/users/ice/tree/src/tree-$TREE_VERSION.tgz
+    fi
+    if [ -d $LOCAL_PATH/tree-$TREE_VERSION ]; then
+        rm -rf $LOCAL_PATH/tree-$TREE_VERSION
+    fi
+    tar xf tree-$TREE_VERSION.tgz
+    cd tree-$TREE_VERSION
+
+    echo "int strverscmp (const char *s1, const char *s2);" >> tree.h
+    sed -i -e "/#ifndef __linux__/d" -e "/#endif/d" strverscmp.c
+
+    make \
+        AR=$AR \
+        CC=$CC \
+        AS=$AS \
+        CXX=$CXX \
+        LD=$LD \
+        RANLIB=$RANLIB \
+        STRIP=$STRIP \
+        CFLAGS="$BUILD_CFLAGS" \
+        CXXFLAGS="$BUILD_CFLAGS" \
+        LDFLAGS="$BUILD_LDFLAGS_STATIC" \
+        -j8
+    make install prefix= DESTDIR=$LOCAL_PATH/tree
+    $STRIP $LOCAL_PATH/tree/tree
+    cd ..
+    rm -rf tree-$TREE_VERSION
+}
+
 build_fusermount() {
     if [ ! -f $LOCAL_PATH/fuse-$LIBFUSE_VERSION.tar.xz ]; then
         wget https://github.com/libfuse/libfuse/releases/download/fuse-$LIBFUSE_VERSION/fuse-$LIBFUSE_VERSION.tar.xz
@@ -350,6 +386,7 @@ build_built_in() {
     build_zstd
     build_tar
     build_coreutls
+    build_tree
 }
 
 build_extend() {
@@ -361,7 +398,7 @@ package_built_in() {
     # Built-in modules
     mkdir -p built_in/$TARGET_ARCH
     echo "$BIN_VERSION" > built_in/version
-    zip -pj built_in/$TARGET_ARCH/bin coreutls/bin/df tar/bin/tar zstd/bin/zstd built_in/version
+    zip -pj built_in/$TARGET_ARCH/bin coreutls/bin/df tar/bin/tar zstd/bin/zstd built_in/version tree/tree
     rm -rf ../app/src/$TARGET_ARCH/assets/bin/bin.zip
     cp built_in/$TARGET_ARCH/bin.zip ../app/src/$TARGET_ARCH/assets/bin/bin.zip
 }
@@ -411,12 +448,20 @@ package() {
 # Start to build
 set_up_utils
 
-abis=("armeabi-v7a" "arm64-v8a" "x86" "x86_64")
+if [[ $2 == all ]]; then
+    abis=("armeabi-v7a" "arm64-v8a" "x86" "x86_64")
+else
+    PRESERVED_IFS="$IFS"
+    IFS=","
+    abis=($2)
+    IFS="$PRESERVED_IFS"
+fi
+
 for abi in ${abis[@]}; do
     TARGET_ARCH=$abi
     set_up_environment
     build $1
     package $1
     # Clean build files
-    rm -rf NDK coreutls tar zstd fuse rclone
+    rm -rf NDK coreutls tar zstd fuse rclone tree
 done
