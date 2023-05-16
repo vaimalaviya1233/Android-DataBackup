@@ -1,0 +1,43 @@
+Categories:
+  - System
+License: GPL-3.0-only
+AuthorName: XayahSuSuSu
+AuthorEmail: zds1249475336@gmail.com
+SourceCode: https://github.com/XayahSuSuSu/Android-DataBackup
+IssueTracker: https://github.com/XayahSuSuSu/Android-DataBackup/issues
+Translation: https://hosted.weblate.org/engage/databackup/
+Changelog: https://github.com/XayahSuSuSu/Android-DataBackup/releases
+
+RequiresRoot: 'yes'
+
+RepoType: git
+Repo: https://github.com/XayahSuSuSu/Android-DataBackup
+
+Builds:
+  - versionName: 1.0.0sp1
+    versionCode: 96
+    commit: 897b6df259c677c23c9bdc47d193d424df6080b6
+    subdir: app
+    sudo:
+      - apt-get update
+      - apt-get install openjdk-17-jdk wget zip unzip bzip2 make gcc g++ clang meson golang-go cmake -y -q
+    gradle:
+      - yes
+    prebuild: 
+      - sed -i -e '/com.google.gms/d' -e '/com.google.firebase/d' build.gradle ../build.gradle
+      - sed -i -e '/premium/,+2d' build.gradle
+      - sed -i -e '/sudo apt-get/,+1d' ../build_bin.sh
+    scandelete:
+      - extend
+      - check
+      - app/src/arm64-v8a/assets/bin/bin.zip
+      - app/src/armeabi-v7a/assets/bin/bin.zip
+      - app/src/x86/assets/bin/bin.zip
+      - app/src/x86_64/assets/bin/bin.zip
+    build:
+      - chmod 777 ./../build_bin.sh
+      - ./../build_bin.sh built-in
+    output: build/outputs/apk/arm64-v8aFoss/release/DataBackup-$$VERSION$$-arm64-v8a-foss-release.apk
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^(?!.*-)(App ).*$
